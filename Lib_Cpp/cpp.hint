@@ -1,0 +1,2 @@
+#define LIBCPP_API __declspec(dllexport)
+#define LIBCPP_API __declspec(dllimport)
