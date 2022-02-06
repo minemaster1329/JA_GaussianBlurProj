@@ -3,11 +3,72 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:system="clr-namespace:System;assembly=System"
         xmlns:local="clr-namespace:JA_GaussianBlurProj"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        <Button Content="Button" HorizontalAlignment="Left" Margin="130,159,0,0" VerticalAlignment="Top" Click="Button_Click"/>
-
+        Title="Gaussian Blur v1.0" MinHeight="700" MinWidth="450">
+    <Window.Resources>
+        <local:MainWindowViewModel x:Key="MainWindowViewModel"/>
+    </Window.Resources>
+    <Grid DataContext="{StaticResource MainWindowViewModel}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="40"/>
+            <ColumnDefinition Width="120"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="40"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="20"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <Label Content="Input directory:" Margin="5,5,10,5" Grid.ColumnSpan="2"/>
+        <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding InputDirectory}" TextWrapping="Wrap" Margin="10,10,10,10" Name="SelectedInputDirectory" Grid.ColumnSpan="2"/>
+        <Button Content="Select input directory" Margin="10,10,10,10" Grid.Row="1" Grid.ColumnSpan="4" Grid.Column="0"
+                Name="SelectInputDirectoryButton" Command="{Binding SelectInputDirectoryCommand}"/>
+        <TextBlock Grid.Column="2" Grid.Row="2" Text="{Binding OutputDirectory}" TextWrapping="Wrap" Margin="10,10,10,10" Name="SelectedOutputDirectory" Grid.ColumnSpan="2"/>
+        <Button Content="Select output directory" Margin="10,10,10,10" Grid.Row="3" Grid.ColumnSpan="4" Grid.Column="0" Name="SelectOutputDirectoryButton" Command="{Binding SelectOutputDirectoryCommand}"/>
+        <Label Content="Output directory" Grid.Row="2" Grid.Column="0" Margin="5,5,10,5" Grid.ColumnSpan="2"/>
+        <Label Content="Sigma parameter" Grid.Row="4" Grid.Column="0" Margin="5,5,10,5" Grid.ColumnSpan="2"/>
+        <Slider Margin="10,10,10,10" Grid.Row="5" Grid.ColumnSpan="2" Grid.Column="1" Name="SigmaSlider" Minimum="-20" Maximum="20" Value="{Binding Sigma}"/>
+        <Label Content="-20" Grid.Row="5" Grid.Column="0" Margin="5"/>
+        <Label Content="20" Grid.Row="5" Margin="5,5,5,5" Grid.Column="3"/>
+        <TextBlock Grid.Column="2" Margin="10,10,10,10" Grid.Row="4" Text="{Binding ElementName=SigmaSlider, Path=Value}" TextWrapping="Wrap" Grid.ColumnSpan="2"/>
+        <Label Content="Radius" Grid.Row="6" Grid.ColumnSpan="2" Grid.Column="0" Margin="10,5,10,5"/>
+        <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Grid.Row="6" Text="{Binding ElementName=RadiusSlider, Path=Value}" TextWrapping="Wrap" Margin="10,10,10,10"/>
+        <Label Content="1" Grid.Row="7" Grid.Column="0" Margin="5"/>
+        <Label Content="10" Grid.Row="7" Margin="5" Grid.Column="3"/>
+        <Slider Grid.Column="1" Grid.Row="7" Grid.ColumnSpan="2" Margin="10,10,10,0" Minimum="1" Maximum="10" Value="{Binding Radius}" TickPlacement="BottomRight" TickFrequency="1" IsSnapToTickEnabled="True" Name="RadiusSlider"/>
+        <Label Content="Threads count" Grid.Row="9" Grid.ColumnSpan="2" Grid.Column="0" Margin="5,5,5,5"/>
+        <TextBlock Grid.Column="2" Margin="10,10,10,10" Grid.Row="9" Text="{Binding ElementName=ThreadsCountSlider, Path=Value}" TextWrapping="Wrap" Grid.ColumnSpan="2"/>
+        <Label Content="1" Margin="5,5,5,5" Grid.Row="10" Grid.Column="0" />
+        <Label Content="64" Margin="5,5,5,5" Grid.Row="10" Grid.Column="3"/>
+        <Slider Grid.Column="1" Margin="10,10,10,0" Grid.Row="10" Grid.ColumnSpan="2" Name="ThreadsCountSlider" Minimum="1" Maximum="64" TickPlacement="BottomRight" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding ThreadsCount}"/>
+        <Button Content="Calculate" Margin="10,10,10,10" Grid.Row="13" Grid.ColumnSpan="4" Grid.Column="0"
+                Name="CalculateButton" Command="{Binding CalculateCommand}"/>
+        <Button Content="Benchmark" Margin="10,10,10,10" Grid.Row="14" Grid.ColumnSpan="4" Grid.Column="0"
+                Name="BenchmarkButton" Command="{Binding BenchmarkAsyncCommand}"/>
+        <ProgressBar Grid.ColumnSpan="4" Grid.Column="0" Margin="10,10,10,10" Grid.Row="12" Minimum="0" Maximum="100" Value="{Binding Progress, Mode=OneWay}"/>
+        <ComboBox Grid.Column="2" Margin="10,10,10,10" Grid.Row="11" Grid.ColumnSpan="2" SelectedIndex="{Binding SelectedLib}">
+            <ComboBoxItem IsSelected="True">C#</ComboBoxItem>
+            <ComboBoxItem>C++</ComboBoxItem>
+            <ComboBoxItem>ASM</ComboBoxItem>
+        </ComboBox>
+        <Label Content="Select lib" Margin="10,5,10,6" Grid.Row="11" Grid.ColumnSpan="2" Grid.Column="0"/>
+        <Label Content="Duration" Margin="5" Grid.Row="15" Grid.ColumnSpan="2"/>
     </Grid>
 </Window>

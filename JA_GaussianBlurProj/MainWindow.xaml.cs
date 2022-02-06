@@ -23,28 +23,9 @@ namespace JA_GaussianBlurProj
     /// </summary>
     public partial class MainWindow : Window
     {
-        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibASM.dll")]
-        static extern int MyProc1(int a, int b);
-
-        [DllImport(@"C:\\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibCpp.dll")]
-        static extern int MyProcCPP(int a, int b);
-
         public MainWindow()
         {
             InitializeComponent();
-        }
-
-        private void Button_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                int a = 2, b = 3;
-                int c = MyProc1(a, b);
-                c = MyProcCPP(a, b);
-                c = Calculate.MyProc_CS(a, b);
-                Debug.WriteLine(c);
-            }
-            catch (Exception) { }
         }
     }
 }

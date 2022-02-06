@@ -8,7 +8,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="SimplexNoise" Version="2.0.0" />
+    <PackageReference Include="System.Drawing.Common" Version="4.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Lab_CS\Lab_CS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms">
+      <HintPath>..\..\..\..\..\..\Windows\WinSxS\amd64_system.windows.forms_b77a5c561934e089_4.0.15805.0_none_8bf163462eb38db0\System.Windows.Forms.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
