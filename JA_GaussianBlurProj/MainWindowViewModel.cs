@@ -10,8 +10,12 @@ using JA_GaussianBlurProj.Annotations;
 
 namespace JA_GaussianBlurProj
 {
-    public partial class MainWindowViewModel : INotifyPropertyChanged
+    public unsafe partial class MainWindowViewModel : INotifyPropertyChanged
     {
+        [DllImport("C:\\Users\\StdUser\\source\\repos\\JA_GaussianBlurProj\\x64\\Debug\\LibASM.dll")]
+        private static  extern float MyProc5(float fl1, float fl2);
+
+
         private readonly object _progressLocker = new object();
 
         public RelaySyncCommand SelectInputDirectoryCommand { get; }

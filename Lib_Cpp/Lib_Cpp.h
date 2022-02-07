@@ -10,4 +10,4 @@
 #define LIBCPP_API __declspec(dllimport)
 #endif
 
-extern "C" LIBCPP_API int MyProcCPP(int a, int b);
+extern "C" LIBCPP_API float CalculatePixelCpp(float* pixels, float* weights, float sumOfWeights, int diameter);

@@ -5,20 +5,26 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using JA_GaussianBlurProj.Annotations;
+using Lab_CS;
 using SimplexNoise;
+using static System.Windows.Forms.DialogResult;
+using static JA_GaussianBlurProj.ImageCalculationClasses;
 using MessageBox = System.Windows.Forms.MessageBox;
 
 namespace JA_GaussianBlurProj
 {
-    public partial class MainWindowViewModel
+    public unsafe partial class MainWindowViewModel
     {
-        private enum TestImageType { Small, Normal, Large }
+        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibCPP.dll")]
+        public static extern unsafe float CalculatePixelCpp(float* pixels, float* weights, float sumOfWeights,
+            int diameter);
         
         private void SelectInputDirectoryCommandExecute(object parameter)
         {
@@ -43,31 +49,113 @@ namespace JA_GaussianBlurProj
             }
         }
 
-        private void CalculateButtonCommandExecute(object parameter)
+        private unsafe void CalculateButtonCommandExecute(object parameter)
         {
-            Debug.WriteLine("Calculating with...");
+            if (Sigma == 0.0f) return;
+            DirectoryInfo outputDir;
+            if (!Directory.Exists("D:\\TestData\\Output"))
+                outputDir = Directory.CreateDirectory("D:\\TestData\\Output");
+            else outputDir = new DirectoryInfo("D:\\TestData\\Output");
+            Bitmap bmp = new Bitmap(Image.FromFile("D:\\TestData\\small\\194702399.jpg"));
+            float[,] imageR = new float[bmp.Height, bmp.Width];
+            float[,] imageG = new float[bmp.Height, bmp.Width];
+            float[,] imageB = new float[bmp.Height, bmp.Width];
+                            
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    imageR[i, j] = bmp.GetPixel(j, i).R;
+                    imageG[i, j] = bmp.GetPixel(j, i).G;
+                    imageB[i, j] = bmp.GetPixel(j, i).B;
+                }
+            }
+
+            float[,] imageRExtended = ExtendImage(imageR, Radius);
+            float[,] imageGExtended = ExtendImage(imageG, Radius);
+            float[,] imageBExtended = ExtendImage(imageB, Radius);
+
+            (float[] gaussianMatrix, float sumOfWeights) = CalculateGaussianMatrix(Radius, Sigma);
+            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            {
+                for (int i = 0; i < bmp.Height; i++)
+                {
+                    for (int j = 0; j < bmp.Width; j++)
+                    {
+                        float[] imageRKernel = ExtractKernel(imageRExtended, Radius, i, j);
+                        float[] imageGKernel = ExtractKernel(imageGExtended, Radius, i, j);
+                        float[] imageBKernel = ExtractKernel(imageBExtended, Radius, i, j);
+
+                        fixed (float* imageRKernelPtr = imageRKernel, imageGKernelPtr = imageGKernel, imageBKernelPtr = imageBKernel)
+                        {
+                            imageR[i, j] = Calculate.CalculatePixel(
+                                imageRKernelPtr,
+                                gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
+
+                            imageG[i, j] = Calculate.CalculatePixel(
+                                imageGKernelPtr,
+                                gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
+
+                            imageB[i, j] = Calculate.CalculatePixel(
+                                imageBKernelPtr,
+                                gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
+
+                            //imageR[i, j] = CalculatePixelCpp(
+                            //   imageRKernelPtr,
+                            //   gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
+
+                            //imageG[i, j] = CalculatePixelCpp(
+                            //    imageGKernelPtr,
+                            //    gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
+
+                            //imageB[i, j] = CalculatePixelCpp(
+                            //    imageBKernelPtr,
+                            //    gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0, i1 = Radius; i < bmp.Height; i++, i1++)
+            {
+                for (int j = 0, j1 = Radius; j < bmp.Width; j++, j1++)
+                {
+                    bmp.SetPixel(j,i,Color.FromArgb((int)imageR[i,j],(int) imageG[i,j],(int) imageB[i,j]));
+                }
+            }
+
+            bmp.Save("D:\\TestData\\small\\image.png", ImageFormat.Png);
+            Debug.WriteLine("Calculating...");
         }
 
         private async Task BenchmarkButtonAsyncCommandExecute()
         {
-            Debug.WriteLine("Benchmarking...");
-            DialogResult messageBoxResult = MessageBox.Show("Would you like to generate new test data?",
-                "Confirm generating new test data", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button1);
+            //Debug.WriteLine("Benchmarking...");
+            //DialogResult messageBoxResult = MessageBox.Show("Would you like to generate new test data?",
+            //    "Confirm generating new test data", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
+            //    MessageBoxDefaultButton.Button1);
+            //float[,] gaussianMatrix;
+            //if (Sigma != 0.0f)
+            //{
+            //    gaussianMatrix = ImageCalculationClasses.CalculateGaussianMatrix(Radius, Sigma);
+            //}
+            //else
+            //{
+            //    MessageBox.Show("Sigma patameter must be different from 0");
+            //}
+            //if (messageBoxResult == Yes)
+            //{
+            //    await GenerateTestDataAsync();
+            //}
+            //else if (messageBoxResult == Cancel) return;
 
-            if (messageBoxResult == DialogResult.Yes)
-            {
-                await GenerateTestDataAsync();
-            }
-            else if (messageBoxResult == DialogResult.Cancel) return;
+            //DirectoryInfo smallDataDir = new DirectoryInfo("D:\\TestData\\small");
+            ////DirectoryInfo mediumDataDir = new DirectoryInfo("D:\\TestData\\medium");
+            ////DirectoryInfo largeDataDir = new DirectoryInfo("D:\\TestData\\large");
 
-            DirectoryInfo smallDataDir = new DirectoryInfo("D:\\TestData\\small");
-            DirectoryInfo mediumDataDir = new DirectoryInfo("D:\\TestData\\medium");
-            DirectoryInfo largeDataDir = new DirectoryInfo("D:\\TestData\\large");
-
-            ConcurrentBag<FileInfo> imagesSmall = new ConcurrentBag<FileInfo>(smallDataDir.EnumerateFiles());
-            ConcurrentBag<FileInfo> imagesMedium = new ConcurrentBag<FileInfo>(mediumDataDir.EnumerateFiles());
-            ConcurrentBag<FileInfo> imagesLarge = new ConcurrentBag<FileInfo>(largeDataDir.EnumerateFiles());
+            //ConcurrentBag<FileInfo> imagesSmall = new ConcurrentBag<FileInfo>(smallDataDir.EnumerateFiles());
+            ////ConcurrentBag<FileInfo> imagesMedium = new ConcurrentBag<FileInfo>(mediumDataDir.EnumerateFiles());
+            ////ConcurrentBag<FileInfo> imagesLarge = new ConcurrentBag<FileInfo>(largeDataDir.EnumerateFiles());
         }
 
         private Task GenerateTestDataAsync() => Task.Factory.StartNew((() =>
