@@ -10,7 +10,7 @@ using JA_GaussianBlurProj.Annotations;
 
 namespace JA_GaussianBlurProj
 {
-    public unsafe partial class MainWindowViewModel : INotifyPropertyChanged
+    public partial class MainWindowViewModel : INotifyPropertyChanged
     {
         [DllImport("C:\\Users\\StdUser\\source\\repos\\JA_GaussianBlurProj\\x64\\Debug\\LibASM.dll")]
         private static  extern float MyProc5(float fl1, float fl2);
@@ -20,7 +20,7 @@ namespace JA_GaussianBlurProj
 
         public RelaySyncCommand SelectInputDirectoryCommand { get; }
         public RelaySyncCommand SelectOutputDirectoryCommand { get; }
-        public RelaySyncCommand CalculateCommand { get; }
+        public RelayAsyncCommand CalculateCommand { get; }
         public RelayAsyncCommand BenchmarkAsyncCommand { get; }
 
         private int _threadsCount = 1;
@@ -28,7 +28,9 @@ namespace JA_GaussianBlurProj
         private int _radius = 1;
         private string _inputDirectory;
         private string _outputDirectory;
-        private double _progress = 1.0;
+        private double _progress;
+        private string _duration;
+        private double _imagesCount;
 
         #region PROPERTIES
         public int ThreadsCount
@@ -100,7 +102,29 @@ namespace JA_GaussianBlurProj
             }
         }
 
+        public double ImagesCount
+        {
+            get => _imagesCount;
+            set
+            {
+                _imagesCount = value;
+                OnPropertyChanged();
+            }
+        }
+
         public int SelectedLib { get; set; }
+
+        public string Duration
+        {
+            get => _duration;
+            set
+            {
+                _duration = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool NotBusy { get; private set; } = true;
         #endregion
 
         public int TimeMiliseconds { get; private set; } = 0;
@@ -110,8 +134,9 @@ namespace JA_GaussianBlurProj
 
             SelectInputDirectoryCommand = new RelaySyncCommand(SelectInputDirectoryCommandExecute);
             SelectOutputDirectoryCommand = new RelaySyncCommand(SelectOutputDirectoryCommandExecute);
-            CalculateCommand = new RelaySyncCommand(CalculateButtonCommandExecute);
+            CalculateCommand = new RelayAsyncCommand(CalculateButtonCommandExecute);
             BenchmarkAsyncCommand = new RelayAsyncCommand(BenchmarkButtonAsyncCommandExecute);
+            Progress = 0.0;
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

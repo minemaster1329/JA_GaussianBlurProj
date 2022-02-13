@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -17,15 +19,32 @@ using SimplexNoise;
 using static System.Windows.Forms.DialogResult;
 using static JA_GaussianBlurProj.ImageCalculationClasses;
 using MessageBox = System.Windows.Forms.MessageBox;
+using Excel = Microsoft.Office.Interop.Excel;
 
 namespace JA_GaussianBlurProj
 {
-    public unsafe partial class MainWindowViewModel
+    public partial class MainWindowViewModel
     {
         [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibCPP.dll")]
         public static extern unsafe float CalculatePixelCpp(float* pixels, float* weights, float sumOfWeights,
             int diameter);
-        
+
+        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibCPP.dll")]
+        public static extern unsafe float CalculatePixelCpp2(float* pixels, float* weights, float sumOfWeights,
+            int diameter);
+
+        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibASM.dll")]
+        public static extern unsafe float CalculatePixelAsm(float* pixels, float* weights, float sumOfWeights,
+            int diameter);
+
+        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibASM.dll")]
+        public static extern unsafe float CalculatePixelAsm1(float* pixels, float* weights, float sumOfWeights,
+            int diameter);
+
+
+        private int _numberOfThreadsNotCompleted = 100;
+        private ManualResetEvent _manualResetEvent = new ManualResetEvent(false);
+
         private void SelectInputDirectoryCommandExecute(object parameter)
         {
             FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
@@ -49,116 +68,170 @@ namespace JA_GaussianBlurProj
             }
         }
 
-        private unsafe void CalculateButtonCommandExecute(object parameter)
+        private async Task CalculateButtonCommandExecute()
         {
-            if (Sigma == 0.0f) return;
-            DirectoryInfo outputDir;
-            if (!Directory.Exists("D:\\TestData\\Output"))
-                outputDir = Directory.CreateDirectory("D:\\TestData\\Output");
-            else outputDir = new DirectoryInfo("D:\\TestData\\Output");
-            Bitmap bmp = new Bitmap(Image.FromFile("D:\\TestData\\small\\194702399.jpg"));
-            float[,] imageR = new float[bmp.Height, bmp.Width];
-            float[,] imageG = new float[bmp.Height, bmp.Width];
-            float[,] imageB = new float[bmp.Height, bmp.Width];
-                            
-            for (int i = 0; i < bmp.Height; i++)
+            NotBusy = false;
+            await Task.Run((() =>
             {
-                for (int j = 0; j < bmp.Width; j++)
+                bool dirError = false;
+                string errors = "";
+                if (Sigma == 0.0f)
                 {
-                    imageR[i, j] = bmp.GetPixel(j, i).R;
-                    imageG[i, j] = bmp.GetPixel(j, i).G;
-                    imageB[i, j] = bmp.GetPixel(j, i).B;
+                    MessageBox.Show("Sigma parameter must be greater than 0", "Error when checking input parameters",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
-            }
 
-            float[,] imageRExtended = ExtendImage(imageR, Radius);
-            float[,] imageGExtended = ExtendImage(imageG, Radius);
-            float[,] imageBExtended = ExtendImage(imageB, Radius);
-
-            (float[] gaussianMatrix, float sumOfWeights) = CalculateGaussianMatrix(Radius, Sigma);
-            fixed (float* gaussianMatrixPtr = gaussianMatrix)
-            {
-                for (int i = 0; i < bmp.Height; i++)
+                if (InputDirectory == "")
                 {
-                    for (int j = 0; j < bmp.Width; j++)
+                    errors += "Input directory cannot be empty\n";
+                    dirError = true;
+                }
+
+                if (OutputDirectory == "")
+                {
+                    errors += "Output directory cannot be empty\n";
+                    dirError = true;
+                }
+
+                if (dirError)
+                {
+                    MessageBox.Show(errors, "Error when checking input parameters", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                IEnumerable<FileInfo> photos =
+                    new DirectoryInfo(InputDirectory).EnumerateFiles().Where(f => f.Extension == ".png" || f.Extension == ".jpg");
+
+                if (!photos.Any())
+                {
+                    MessageBox.Show("No Image files have been found", "Error when searching for files", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                ImagesCount = photos.Count();
+                Progress = 0.0;
+
+                if (ThreadsCount <= Environment.ProcessorCount)
+                {
+                    int cpu = 1;
+                    for (int i = 1; i < ThreadsCount; i++)
                     {
-                        float[] imageRKernel = ExtractKernel(imageRExtended, Radius, i, j);
-                        float[] imageGKernel = ExtractKernel(imageGExtended, Radius, i, j);
-                        float[] imageBKernel = ExtractKernel(imageBExtended, Radius, i, j);
-
-                        fixed (float* imageRKernelPtr = imageRKernel, imageGKernelPtr = imageGKernel, imageBKernelPtr = imageBKernel)
-                        {
-                            imageR[i, j] = Calculate.CalculatePixel(
-                                imageRKernelPtr,
-                                gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
-
-                            imageG[i, j] = Calculate.CalculatePixel(
-                                imageGKernelPtr,
-                                gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
-
-                            imageB[i, j] = Calculate.CalculatePixel(
-                                imageBKernelPtr,
-                                gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
-
-                            //imageR[i, j] = CalculatePixelCpp(
-                            //   imageRKernelPtr,
-                            //   gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
-
-                            //imageG[i, j] = CalculatePixelCpp(
-                            //    imageGKernelPtr,
-                            //    gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
-
-                            //imageB[i, j] = CalculatePixelCpp(
-                            //    imageBKernelPtr,
-                            //    gaussianMatrixPtr, sumOfWeights, 2 * Radius + 1);
-                        }
+                        cpu <<= 1;
+                        cpu |= 1;
                     }
-                }
-            }
 
-            for (int i = 0, i1 = Radius; i < bmp.Height; i++, i1++)
-            {
-                for (int j = 0, j1 = Radius; j < bmp.Width; j++, j1++)
+                    Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(cpu);
+                    Process.GetCurrentProcess().Refresh();
+                }
+
+                else
                 {
-                    bmp.SetPixel(j,i,Color.FromArgb((int)imageR[i,j],(int) imageG[i,j],(int) imageB[i,j]));
+                    Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(65535);
+                    Process.GetCurrentProcess().Refresh();
                 }
-            }
 
-            bmp.Save("D:\\TestData\\small\\image.png", ImageFormat.Png);
-            Debug.WriteLine("Calculating...");
+                ThreadPool.SetMaxThreads(ThreadsCount, ThreadsCount);
+                _numberOfThreadsNotCompleted = photos.Count();
+                WaitCallback waitCallback;
+                switch (SelectedLib)
+                {
+                    case 0:
+                        waitCallback = CalculatePhotoCS;
+                        break;
+                    case 1:
+                        waitCallback = CalculatePhotoCPP;
+                        break;
+                    case 2:
+                        waitCallback = CalculatePhotoASM;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException("Invalid lib selected");
+                }
+                Stopwatch stopwatch = new Stopwatch();
+                stopwatch.Start();
+                foreach (FileInfo file in photos)
+                {
+                    ThreadPool.QueueUserWorkItem(waitCallback, file);
+                }
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                _manualResetEvent.Reset();
+                Duration = $"{stopwatch.ElapsedMilliseconds} ms";
+            }));
         }
 
         private async Task BenchmarkButtonAsyncCommandExecute()
         {
-            //Debug.WriteLine("Benchmarking...");
-            //DialogResult messageBoxResult = MessageBox.Show("Would you like to generate new test data?",
-            //    "Confirm generating new test data", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
-            //    MessageBoxDefaultButton.Button1);
-            //float[,] gaussianMatrix;
-            //if (Sigma != 0.0f)
-            //{
-            //    gaussianMatrix = ImageCalculationClasses.CalculateGaussianMatrix(Radius, Sigma);
-            //}
-            //else
-            //{
-            //    MessageBox.Show("Sigma patameter must be different from 0");
-            //}
-            //if (messageBoxResult == Yes)
-            //{
-            //    await GenerateTestDataAsync();
-            //}
-            //else if (messageBoxResult == Cancel) return;
+            /*DialogResult askForBenchmark =
+                MessageBox.Show(
+                    "Are you sure you want to run benchmark?\nIt may take several hours to generate output:",
+                    "Are you sure?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (askForBenchmark == No) return;
 
-            //DirectoryInfo smallDataDir = new DirectoryInfo("D:\\TestData\\small");
-            ////DirectoryInfo mediumDataDir = new DirectoryInfo("D:\\TestData\\medium");
-            ////DirectoryInfo largeDataDir = new DirectoryInfo("D:\\TestData\\large");
+            DialogResult askForGeneratingNewTestdataDialogResult = MessageBox.Show(
+                "Would you like to generate new test data", "Benchmark...", MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
 
-            //ConcurrentBag<FileInfo> imagesSmall = new ConcurrentBag<FileInfo>(smallDataDir.EnumerateFiles());
-            ////ConcurrentBag<FileInfo> imagesMedium = new ConcurrentBag<FileInfo>(mediumDataDir.EnumerateFiles());
-            ////ConcurrentBag<FileInfo> imagesLarge = new ConcurrentBag<FileInfo>(largeDataDir.EnumerateFiles());
+            switch (askForGeneratingNewTestdataDialogResult)
+            {
+                case Cancel:
+                    return;
+                case Yes:
+                    await GenerateTestDataAsync();
+                    break;
+                case No:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            Sigma = 10.0f;
+            Radius = 10;
+
+            int[] threads = {1, 3, 15, 255, 65535};
+            int[] threads_counts = {1, 2, 4, 8, 16};
+            Excel.Application xlApp = new Excel.Application();
+            if (xlApp is null)
+            {
+                MessageBox.Show("Cannot open excel app");
+                return;
+            }
+
+            Excel.Workbook workbook;
+            workbook = xlApp.Workbooks.Add(Missing.Value);
+
+            Excel.Worksheet worksheet_small = (Excel.Worksheet)workbook.Worksheets[1];
+            worksheet_small.Name = "Results Small data";
+            worksheet_small.Cells[1, 1] = "Threads count:";
+            worksheet_small.Cells[1, 2] = "Time (ms):";*/
+
+            /*Excel.Worksheet worksheet_medium = (Excel.Worksheet)workbook.Worksheets.Add();
+            worksheet_medium.Name = "Results Medium Data";
+            worksheet_medium.Cells[1, 1] = "Threads count:";
+            worksheet_medium.Cells[1, 2] = "Time (ms):";*/
+
+            /*for (int i = 0; i < 5; i++)
+            {
+                Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(threads[i]);
+                Process.GetCurrentProcess().Refresh();
+                ThreadPool.SetMaxThreads(threads_counts[i], threads_counts[i]);
+                long time_small_data = await BenchmarkCSAsyncSmall();
+                worksheet_small.Cells[i + 2, 1] = threads_counts[i];
+                worksheet_small.Cells[i + 2, 2] = time_small_data;
+            }
+
+            workbook.SaveAs(@"D:\TestData\benchmark_results.xlsx", Excel.XlFileFormat.xlWorkbookDefault);
+            workbook.Close(true, Missing.Value, Missing.Value);
+            xlApp.Quit();
+
+            Marshal.ReleaseComObject(worksheet_small);
+            //Marshal.ReleaseComObject(worksheet_medium);
+            Marshal.ReleaseComObject(workbook);
+            Marshal.ReleaseComObject(xlApp);*/
         }
 
-        private Task GenerateTestDataAsync() => Task.Factory.StartNew((() =>
+        private Task GenerateTestDataAsync() => Task.Factory.StartNew(() =>
         {
             const int samples = 50;
             DirectoryInfo smallDataDir;
@@ -291,7 +364,6 @@ namespace JA_GaussianBlurProj
 
                 Noise.Seed = seedsList[k + 200];
                 noiseB = Noise.Calc2D(largeImageSize, largeImageSize, 0.4f);
-
                 for (int l = 0; l < largeImageSize; l++)
                 {
                     for (int m = 0; m < largeImageSize; m++)
@@ -308,7 +380,241 @@ namespace JA_GaussianBlurProj
             }
 
             #endregion
-        }));
-        
+        });
+
+        #region BENCHMARK SMALL DATA
+        private Task<long> BenchmarkCSAsyncSmall()
+        {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\small");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
+
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
+        }
+
+        private void BenchmarkCPPAsyncSmall()
+        {
+
+        }
+        private void BenchmarkASMAsyncSmall()
+        {
+
+        }
+        #endregion
+
+        #region BENCHMARK MEDIUM DATA
+        private void BenchmarkCSAsyncMedium()
+        {
+
+        }
+
+        private void BenchmarkCPPAsyncMedium()
+        {
+
+        }
+
+        private void BenchmarkASMAsyncMedium()
+        {
+
+        }
+        #endregion
+
+        #region CALCULATE PHOTO
+
+        private unsafe void CalculatePhotoCS(object param)
+        {
+            FileInfo file = (FileInfo) param;
+            Bitmap bmp = new Bitmap(Image.FromFile(file.FullName));
+
+            float[,] pixelsR = new float[bmp.Height, bmp.Width];
+            float[,] pixelsG = new float[bmp.Height, bmp.Width];
+            float[,] pixelsB = new float[bmp.Height, bmp.Width];
+
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    Color color = bmp.GetPixel(j, i);
+                    pixelsR[i, j] = color.R;
+                    pixelsG[i, j] = color.G;
+                    pixelsB[i, j] = color.B;
+                }
+            }
+
+            float[,] extendedPixelsR = ExtendImage(pixelsR, Radius);
+            float[,] extendedPixelsG = ExtendImage(pixelsG, Radius);
+            float[,] extendedPixelsB = ExtendImage(pixelsB, Radius);
+
+            (float[] gaussianMatrix, float sumOfWeights) = CalculateGaussianMatrix(Radius, Sigma);
+
+            int diameter = 2 * Radius + 1;
+
+            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            {
+                for (int i = 0; i < bmp.Height; i++)
+                {
+                    for (int j = 0; j < bmp.Width; j++)
+                    {
+                        float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
+                        float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
+                        float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
+                        fixed(float* kernelRPtr = kernelR, kernelGPtr = kernelG, kernelBPtr = kernelB)
+                        {
+                            pixelsR[i, j] = Calculate.CalculatePixel(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsG[i, j] = Calculate.CalculatePixel(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsB[i, j] = Calculate.CalculatePixel(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    bmp.SetPixel(j,i,Color.FromArgb((int) pixelsR[i,j],(int) pixelsG[i,j],(int) pixelsB[i,j]));
+                }
+            }
+
+            bmp.Save($@"{OutputDirectory}\{file.Name}");
+            if (Interlocked.Decrement(ref _numberOfThreadsNotCompleted) == 0) _manualResetEvent.Set();
+            ++Progress;
+        }
+
+        private unsafe void CalculatePhotoCPP(object param)
+        {
+            FileInfo file = (FileInfo)param;
+            Bitmap bmp = new Bitmap(Image.FromFile(file.FullName));
+
+            float[,] pixelsR = new float[bmp.Height, bmp.Width];
+            float[,] pixelsG = new float[bmp.Height, bmp.Width];
+            float[,] pixelsB = new float[bmp.Height, bmp.Width];
+
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    Color color = bmp.GetPixel(j, i);
+                    pixelsR[i, j] = color.R;
+                    pixelsG[i, j] = color.G;
+                    pixelsB[i, j] = color.B;
+                }
+            }
+
+            float[,] extendedPixelsR = ExtendImage(pixelsR, Radius);
+            float[,] extendedPixelsG = ExtendImage(pixelsG, Radius);
+            float[,] extendedPixelsB = ExtendImage(pixelsB, Radius);
+
+            (float[] gaussianMatrix, float sumOfWeights) = CalculateGaussianMatrix(Radius, Sigma);
+
+            int diameter = 2 * Radius + 1;
+
+            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            {
+                for (int i = 0; i < bmp.Height; i++)
+                {
+                    for (int j = 0; j < bmp.Width; j++)
+                    {
+                        float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
+                        float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
+                        float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
+                        fixed (float* kernelRPtr = kernelR, kernelGPtr = kernelG, kernelBPtr = kernelB)
+                        {
+                            //pixelsR[i, j] = CalculatePixelCpp(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsR[i, j] = CalculatePixelCpp(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            //pixelsG[i, j] = CalculatePixelCpp(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsG[i, j] = CalculatePixelCpp(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            //pixelsB[i, j] = CalculatePixelCpp(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsB[i, j] = CalculatePixelCpp(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    bmp.SetPixel(j, i, Color.FromArgb((int)pixelsR[i, j], (int)pixelsG[i, j], (int)pixelsB[i, j]));
+                }
+            }
+
+            bmp.Save($@"{OutputDirectory}\{file.Name}");
+            if (Interlocked.Decrement(ref _numberOfThreadsNotCompleted) == 0) _manualResetEvent.Set();
+            ++Progress;
+        }
+
+        private unsafe void CalculatePhotoASM(object param)
+        {
+            FileInfo file = (FileInfo)param;
+            Bitmap bmp = new Bitmap(Image.FromFile(file.FullName));
+
+            float[,] pixelsR = new float[bmp.Height, bmp.Width];
+            float[,] pixelsG = new float[bmp.Height, bmp.Width];
+            float[,] pixelsB = new float[bmp.Height, bmp.Width];
+
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    Color color = bmp.GetPixel(j, i);
+                    pixelsR[i, j] = color.R;
+                    pixelsG[i, j] = color.G;
+                    pixelsB[i, j] = color.B;
+                }
+            }
+
+            float[,] extendedPixelsR = ExtendImage(pixelsR, Radius);
+            float[,] extendedPixelsG = ExtendImage(pixelsG, Radius);
+            float[,] extendedPixelsB = ExtendImage(pixelsB, Radius);
+
+            (float[] gaussianMatrix, float sumOfWeights) = CalculateGaussianMatrix(Radius, Sigma);
+
+            int diameter = 2 * Radius + 1;
+
+            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            {
+                for (int i = 0; i < bmp.Height; i++)
+                {
+                    for (int j = 0; j < bmp.Width; j++)
+                    {
+                        float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
+                        float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
+                        float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
+                        fixed (float* kernelRPtr = kernelR, kernelGPtr = kernelG, kernelBPtr = kernelB)
+                        {
+                            pixelsR[i, j] = CalculatePixelAsm1(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsG[i, j] = CalculatePixelAsm1(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                            pixelsB[i, j] = CalculatePixelAsm1(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < bmp.Height; i++)
+            {
+                for (int j = 0; j < bmp.Width; j++)
+                {
+                    bmp.SetPixel(j, i, Color.FromArgb((int)pixelsR[i, j], (int)pixelsG[i, j], (int)pixelsB[i, j]));
+                }
+            }
+
+            bmp.Save($@"{OutputDirectory}\{file.Name}");
+            if (Interlocked.Decrement(ref _numberOfThreadsNotCompleted) == 0) _manualResetEvent.Set();
+            ++Progress;
+        }
+
+        #endregion
     }
 }

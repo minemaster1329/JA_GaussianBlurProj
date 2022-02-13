@@ -11,3 +11,7 @@
 #endif
 
 extern "C" LIBCPP_API float CalculatePixelCpp(float* pixels, float* weights, float sumOfWeights, int diameter);
+
+extern "C" LIBCPP_API float CalculatePixelCpp2(float* pixels, float* weights, float sumOfweights, int diameter);
+
+extern "C" LIBCPP_API float Fun1(float* pixels, float* weights, float sumOfweights, int diameter);

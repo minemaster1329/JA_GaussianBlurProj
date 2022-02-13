@@ -7,40 +7,8 @@ namespace JA_GaussianBlurProj
 {
     public class ImageCalculationClasses
     {
-        public static unsafe float CalculatePixel(float* pixels, float* weights, float sumOfWeights, int diameter)
-        {
-            float output = 0.0f;
-            diameter *= diameter;
-
-            for (int i = 0; i < diameter; i++)
-            {
-                output += pixels[i] * weights[i];
-            }
-
-            return output / sumOfWeights;
-        }
-
-        public static unsafe float* MakeArrayOfPointersFromImage(float[,] pixels)
-        {
-            long dims = pixels.Length;
-            float[] pixelsLin = new float[dims];
-            for (int i = 0; i < pixels.GetLength(0); i++)
-            {
-                for (int j = 0; j < pixels.GetLength(1); j++)
-                {
-                    pixelsLin[pixels.GetLength(0) * i + j] = pixels[i, j];
-                }
-            }
-
-            fixed (float* arr = &pixelsLin[0])
-            {
-                return arr;
-            }
-        }
-
         public static float[,] ExtendImage(float[,] pixels, int radius)
         {
-            //creating new, extended array
             float[,] output = new float[pixels.GetLength(0) + (2 * radius), pixels.GetLength(1) + (2 * radius)];
 
             for (int i = radius; i < pixels.GetLength(0) + radius; i++)
