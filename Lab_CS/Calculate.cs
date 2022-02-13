@@ -6,7 +6,7 @@ namespace Lab_CS
 {
     public class Calculate
     {
-        public static unsafe float CalculatePixel(float* pixels, float* weights, float sumOfWeights, int diameter)
+        public static float CalculatePixel(float[] pixels, float[] weights, float sumOfWeights, int diameter)
         {
             float output = 0.0f;
             diameter *= diameter;

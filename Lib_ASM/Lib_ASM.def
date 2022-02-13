@@ -1,3 +1,2 @@
 LIBRARY LibASM
 EXPORTS CalculatePixelAsm
-EXPORTS CalculatePixelAsm1

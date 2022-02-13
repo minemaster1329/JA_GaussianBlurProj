@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.DirectoryServices.ActiveDirectory;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -25,22 +26,23 @@ namespace JA_GaussianBlurProj
 {
     public partial class MainWindowViewModel
     {
+        private volatile bool _benchmark;
+
+        #if DEBUG
         [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibCPP.dll")]
-        public static extern unsafe float CalculatePixelCpp(float* pixels, float* weights, float sumOfWeights,
+        #else
+        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Release\LibCPP.dll")]
+        #endif
+        public static extern float CalculatePixelCpp(float[] pixels, float[] weights, float sumOfWeights,
             int diameter);
 
-        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibCPP.dll")]
-        public static extern unsafe float CalculatePixelCpp2(float* pixels, float* weights, float sumOfWeights,
+        #if DEBUG
+            [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibASM.dll")]
+        #else
+            [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Release\LibASM.dll")]
+        #endif
+        public static extern float CalculatePixelAsm(float[] pixels, float[] weights, float sumOfWeights,
             int diameter);
-
-        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibASM.dll")]
-        public static extern unsafe float CalculatePixelAsm(float* pixels, float* weights, float sumOfWeights,
-            int diameter);
-
-        [DllImport(@"C:\Users\StdUser\source\repos\JA_GaussianBlurProj\x64\Debug\LibASM.dll")]
-        public static extern unsafe float CalculatePixelAsm1(float* pixels, float* weights, float sumOfWeights,
-            int diameter);
-
 
         private int _numberOfThreadsNotCompleted = 100;
         private ManualResetEvent _manualResetEvent = new ManualResetEvent(false);
@@ -70,6 +72,7 @@ namespace JA_GaussianBlurProj
 
         private async Task CalculateButtonCommandExecute()
         {
+            _benchmark = false;
             NotBusy = false;
             await Task.Run((() =>
             {
@@ -163,7 +166,7 @@ namespace JA_GaussianBlurProj
 
         private async Task BenchmarkButtonAsyncCommandExecute()
         {
-            /*DialogResult askForBenchmark =
+            DialogResult askForBenchmark =
                 MessageBox.Show(
                     "Are you sure you want to run benchmark?\nIt may take several hours to generate output:",
                     "Are you sure?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
@@ -185,33 +188,35 @@ namespace JA_GaussianBlurProj
                 default:
                     throw new ArgumentOutOfRangeException();
             }
-
+            
             Sigma = 10.0f;
             Radius = 10;
 
-            int[] threads = {1, 3, 15, 255, 65535};
-            int[] threads_counts = {1, 2, 4, 8, 16};
+            int[] threads = {1, 3, 15, 255, 65535, 65535, 65535};
+            int[] threads_counts = {1, 2, 4, 8, 16, 32, 64};
             Excel.Application xlApp = new Excel.Application();
-            if (xlApp is null)
+
+            if (xlApp == null)
             {
                 MessageBox.Show("Cannot open excel app");
                 return;
             }
 
+            _benchmark = true;
             Excel.Workbook workbook;
             workbook = xlApp.Workbooks.Add(Missing.Value);
 
             Excel.Worksheet worksheet_small = (Excel.Worksheet)workbook.Worksheets[1];
             worksheet_small.Name = "Results Small data";
             worksheet_small.Cells[1, 1] = "Threads count:";
-            worksheet_small.Cells[1, 2] = "Time (ms):";*/
+            worksheet_small.Cells[1, 2] = "Time (ms):";
 
-            /*Excel.Worksheet worksheet_medium = (Excel.Worksheet)workbook.Worksheets.Add();
+            Excel.Worksheet worksheet_medium = (Excel.Worksheet)workbook.Worksheets.Add();
             worksheet_medium.Name = "Results Medium Data";
             worksheet_medium.Cells[1, 1] = "Threads count:";
-            worksheet_medium.Cells[1, 2] = "Time (ms):";*/
+            worksheet_medium.Cells[1, 2] = "Time (ms):";
 
-            /*for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 7; i++)
             {
                 Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(threads[i]);
                 Process.GetCurrentProcess().Refresh();
@@ -219,6 +224,10 @@ namespace JA_GaussianBlurProj
                 long time_small_data = await BenchmarkCSAsyncSmall();
                 worksheet_small.Cells[i + 2, 1] = threads_counts[i];
                 worksheet_small.Cells[i + 2, 2] = time_small_data;
+                time_small_data = await BenchmarkCPPAsyncSmall();
+                worksheet_small.Cells[i + 2, 3] = time_small_data;
+                time_small_data = await BenchmarkASMAsyncSmall();
+                worksheet_small.Cells[i + 2, 4] = time_small_data;
             }
 
             workbook.SaveAs(@"D:\TestData\benchmark_results.xlsx", Excel.XlFileFormat.xlWorkbookDefault);
@@ -226,19 +235,19 @@ namespace JA_GaussianBlurProj
             xlApp.Quit();
 
             Marshal.ReleaseComObject(worksheet_small);
-            //Marshal.ReleaseComObject(worksheet_medium);
+            Marshal.ReleaseComObject(worksheet_medium);
             Marshal.ReleaseComObject(workbook);
-            Marshal.ReleaseComObject(xlApp);*/
+            Marshal.ReleaseComObject(xlApp);
         }
 
         private Task GenerateTestDataAsync() => Task.Factory.StartNew(() =>
         {
-            const int samples = 50;
+            const int samples = 128;
             DirectoryInfo smallDataDir;
             DirectoryInfo mediumDataDir;
             DirectoryInfo largeDataDir;
 
-            #region Clear Prevoius Test Data
+#region Clear Prevoius Test Data
 
             if (!Directory.Exists("D:\\TestData"))
             {
@@ -287,11 +296,11 @@ namespace JA_GaussianBlurProj
                 file.Delete();
             }
 
-            #endregion
+#endregion
 
-            #region Create New test Data
+#region Create New test Data
 
-            List<int> seedsList = new List<int>(900);
+            List<int> seedsList = new List<int>(9 * samples);
             Random rnd = new Random();
             int seed;
             do
@@ -301,13 +310,13 @@ namespace JA_GaussianBlurProj
                 {
                     seedsList.Add(seed);
                 }
-            } while (seedsList.Count < 900);
+            } while (seedsList.Count < 9 * samples);
 
             const int smallImageSize = 500;
             const int mediumImageSize = 2500;
             const int largeImageSize = 5000;
 
-            for (int i = 0, j = 300, k = 600; i < 100; i++, j++, k++)
+            for (int i = 0, j = 3 * samples, k = 6*samples; i < samples; i++, j++, k++)
             {
                 Noise.Seed = seedsList[i];
                 float[,] noiseR = SimplexNoise.Noise.Calc2D(smallImageSize, smallImageSize, 0.4f);
@@ -379,11 +388,31 @@ namespace JA_GaussianBlurProj
                 bitmap.Save($"D:\\TestData\\large\\img_large{i}.png", ImageFormat.Png);
             }
 
-            #endregion
+#endregion
         });
 
-        #region BENCHMARK SMALL DATA
+#region BENCHMARK SMALL DATA
         private Task<long> BenchmarkCSAsyncSmall()
+        {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\small");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCS, file);
+                }
+
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
+        }
+
+        private Task<long> BenchmarkCPPAsyncSmall()
         {
             return Task.Run(() =>
             {
@@ -402,14 +431,24 @@ namespace JA_GaussianBlurProj
                 return stopwatch.ElapsedMilliseconds;
             });
         }
-
-        private void BenchmarkCPPAsyncSmall()
+        private Task<long> BenchmarkASMAsyncSmall()
         {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\small");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoASM, file);
+                }
 
-        }
-        private void BenchmarkASMAsyncSmall()
-        {
-
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
         }
         #endregion
 
@@ -428,11 +467,11 @@ namespace JA_GaussianBlurProj
         {
 
         }
-        #endregion
+#endregion
 
-        #region CALCULATE PHOTO
+#region CALCULATE PHOTO
 
-        private unsafe void CalculatePhotoCS(object param)
+        private void CalculatePhotoCS(object param)
         {
             FileInfo file = (FileInfo) param;
             Bitmap bmp = new Bitmap(Image.FromFile(file.FullName));
@@ -460,22 +499,16 @@ namespace JA_GaussianBlurProj
 
             int diameter = 2 * Radius + 1;
 
-            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            for (int i = 0; i < bmp.Height; i++)
             {
-                for (int i = 0; i < bmp.Height; i++)
+                for (int j = 0; j < bmp.Width; j++)
                 {
-                    for (int j = 0; j < bmp.Width; j++)
-                    {
-                        float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
-                        float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
-                        float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
-                        fixed(float* kernelRPtr = kernelR, kernelGPtr = kernelG, kernelBPtr = kernelB)
-                        {
-                            pixelsR[i, j] = Calculate.CalculatePixel(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsG[i, j] = Calculate.CalculatePixel(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsB[i, j] = Calculate.CalculatePixel(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                        }
-                    }
+                    float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
+                    float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
+                    float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
+                    pixelsR[i, j] = Calculate.CalculatePixel(kernelR, gaussianMatrix, sumOfWeights, diameter);
+                    pixelsG[i, j] = Calculate.CalculatePixel(kernelG, gaussianMatrix, sumOfWeights, diameter);
+                    pixelsB[i, j] = Calculate.CalculatePixel(kernelB, gaussianMatrix, sumOfWeights, diameter);
                 }
             }
 
@@ -486,13 +519,22 @@ namespace JA_GaussianBlurProj
                     bmp.SetPixel(j,i,Color.FromArgb((int) pixelsR[i,j],(int) pixelsG[i,j],(int) pixelsB[i,j]));
                 }
             }
-
-            bmp.Save($@"{OutputDirectory}\{file.Name}");
+            
             if (Interlocked.Decrement(ref _numberOfThreadsNotCompleted) == 0) _manualResetEvent.Set();
+            if (!_benchmark)
+            {
+                Task.Factory.StartNew((() =>
+                {
+                    lock (bmp)
+                    {
+                        bmp.Save($@"{OutputDirectory}\{file.Name}");
+                    }
+                }));
+            }
             ++Progress;
         }
 
-        private unsafe void CalculatePhotoCPP(object param)
+        private void CalculatePhotoCPP(object param)
         {
             FileInfo file = (FileInfo)param;
             Bitmap bmp = new Bitmap(Image.FromFile(file.FullName));
@@ -520,25 +562,16 @@ namespace JA_GaussianBlurProj
 
             int diameter = 2 * Radius + 1;
 
-            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            for (int i = 0; i < bmp.Height; i++)
             {
-                for (int i = 0; i < bmp.Height; i++)
+                for (int j = 0; j < bmp.Width; j++)
                 {
-                    for (int j = 0; j < bmp.Width; j++)
-                    {
-                        float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
-                        float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
-                        float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
-                        fixed (float* kernelRPtr = kernelR, kernelGPtr = kernelG, kernelBPtr = kernelB)
-                        {
-                            //pixelsR[i, j] = CalculatePixelCpp(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsR[i, j] = CalculatePixelCpp(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            //pixelsG[i, j] = CalculatePixelCpp(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsG[i, j] = CalculatePixelCpp(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            //pixelsB[i, j] = CalculatePixelCpp(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsB[i, j] = CalculatePixelCpp(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                        }
-                    }
+                    float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
+                    float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
+                    float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
+                    pixelsR[i, j] = CalculatePixelCpp(kernelR, gaussianMatrix, sumOfWeights, diameter);
+                    pixelsG[i, j] = CalculatePixelCpp(kernelG, gaussianMatrix, sumOfWeights, diameter);
+                    pixelsB[i, j] = CalculatePixelCpp(kernelB, gaussianMatrix, sumOfWeights, diameter);
                 }
             }
 
@@ -549,13 +582,22 @@ namespace JA_GaussianBlurProj
                     bmp.SetPixel(j, i, Color.FromArgb((int)pixelsR[i, j], (int)pixelsG[i, j], (int)pixelsB[i, j]));
                 }
             }
-
-            bmp.Save($@"{OutputDirectory}\{file.Name}");
+            
             if (Interlocked.Decrement(ref _numberOfThreadsNotCompleted) == 0) _manualResetEvent.Set();
+            if (!_benchmark)
+            {
+                Task.Factory.StartNew((() =>
+                {
+                    lock (bmp)
+                    {
+                        bmp.Save($@"{OutputDirectory}\{file.Name}");
+                    }
+                }));
+            }
             ++Progress;
         }
 
-        private unsafe void CalculatePhotoASM(object param)
+        private void CalculatePhotoASM(object param)
         {
             FileInfo file = (FileInfo)param;
             Bitmap bmp = new Bitmap(Image.FromFile(file.FullName));
@@ -583,22 +625,16 @@ namespace JA_GaussianBlurProj
 
             int diameter = 2 * Radius + 1;
 
-            fixed (float* gaussianMatrixPtr = gaussianMatrix)
+            for (int i = 0; i < bmp.Height; i++)
             {
-                for (int i = 0; i < bmp.Height; i++)
+                for (int j = 0; j < bmp.Width; j++)
                 {
-                    for (int j = 0; j < bmp.Width; j++)
-                    {
-                        float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
-                        float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
-                        float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
-                        fixed (float* kernelRPtr = kernelR, kernelGPtr = kernelG, kernelBPtr = kernelB)
-                        {
-                            pixelsR[i, j] = CalculatePixelAsm1(kernelRPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsG[i, j] = CalculatePixelAsm1(kernelGPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                            pixelsB[i, j] = CalculatePixelAsm1(kernelBPtr, gaussianMatrixPtr, sumOfWeights, diameter);
-                        }
-                    }
+                    float[] kernelR = ExtractKernel(extendedPixelsR, Radius, i, j);
+                    float[] kernelG = ExtractKernel(extendedPixelsG, Radius, i, j);
+                    float[] kernelB = ExtractKernel(extendedPixelsB, Radius, i, j);
+                    pixelsR[i, j] = CalculatePixelAsm(kernelR, gaussianMatrix, sumOfWeights, diameter);
+                    pixelsG[i, j] = CalculatePixelAsm(kernelG, gaussianMatrix, sumOfWeights, diameter);
+                    pixelsB[i, j] = CalculatePixelAsm(kernelB, gaussianMatrix, sumOfWeights, diameter);
                 }
             }
 
@@ -609,12 +645,21 @@ namespace JA_GaussianBlurProj
                     bmp.SetPixel(j, i, Color.FromArgb((int)pixelsR[i, j], (int)pixelsG[i, j], (int)pixelsB[i, j]));
                 }
             }
-
-            bmp.Save($@"{OutputDirectory}\{file.Name}");
+            
             if (Interlocked.Decrement(ref _numberOfThreadsNotCompleted) == 0) _manualResetEvent.Set();
+            if (!_benchmark)
+            {
+                Task.Factory.StartNew((() =>
+                {
+                    lock (bmp)
+                    {
+                        bmp.Save($@"{OutputDirectory}\{file.Name}");
+                    }
+                }));
+            }
             ++Progress;
         }
 
-        #endregion
+#endregion
     }
 }
