@@ -19,9 +19,9 @@ loop_start3:            vxorps ymm1, ymm1, ymm1                                 
                         insertps xmm3, dword ptr[r10+rcx+ 8], 32                ;moving (c+2)-th element of pixels array to ymm3[2]
                         insertps xmm3, dword ptr[r10+rcx+ 12], 48               ;moving (c+3)-th element of pixels array to ymm3[3]
                         vinsertf128 ymm3,ymm3, xmm3, 1                          ;moving first 4 elements from xmm3 to upper part of ymm3
-                        insertps xmm3, dword ptr[r10+rcx+ 16], 0                ;moving (c+4)-th element of pixels array to ymm3[3]
-                        insertps xmm3, dword ptr[r10+rcx+ 20], 16               ;moving (c+5)-th element of pixels array to ymm3[3]
-                        insertps xmm3, dword ptr[r10+rcx+ 24], 32               ;moving (c+6)-th element of pixels array to ymm3[3]
+                        insertps xmm3, dword ptr[r10+rcx+ 16], 0                ;moving (c+4)-th element of pixels array to ymm3[0]
+                        insertps xmm3, dword ptr[r10+rcx+ 20], 16               ;moving (c+5)-th element of pixels array to ymm3[1]
+                        insertps xmm3, dword ptr[r10+rcx+ 24], 32               ;moving (c+6)-th element of pixels array to ymm3[2]
                         insertps xmm3, dword ptr[r10+rcx+ 28], 48               ;moving (c+7)-th element of pixels array to ymm3[3]
 
                         insertps xmm1, dword ptr[r11+rcx], 0                    ;moving c-th element of weights array to xmm1[0]
@@ -29,10 +29,10 @@ loop_start3:            vxorps ymm1, ymm1, ymm1                                 
                         insertps xmm1, dword ptr[r11+rcx+ 8], 32                ;moving (c+2)-th element of weights array to xmm1[2]
                         insertps xmm1, dword ptr[r11+rcx+ 12], 48               ;moving (c+3)-th element of weights array to xmm1[3]
                         vinsertf128 ymm1, ymm1,xmm1, 1                          ;moving first 4 elements from xmm1 to uppper part of ymm3
-                        insertps xmm1, dword ptr[r11+rcx + 16], 0               ;moving (c+4)-th element of weights array to xmm1[4]
-                        insertps xmm1, dword ptr[r11+rcx + 20], 16              ;moving (c+5)-th element of weights array to xmm1[5]
-                        insertps xmm1, dword ptr[r11+rcx + 24], 32              ;moving (c+6)-th element of weights array to xmm1[6]
-                        insertps xmm1, dword ptr[r11+rcx + 28], 48              ;moving (c+7)-th element of weights array to xmm1[7]
+                        insertps xmm1, dword ptr[r11+rcx + 16], 0               ;moving (c+4)-th element of weights array to xmm1[0]
+                        insertps xmm1, dword ptr[r11+rcx + 20], 16              ;moving (c+5)-th element of weights array to xmm1[1]
+                        insertps xmm1, dword ptr[r11+rcx + 24], 32              ;moving (c+6)-th element of weights array to xmm1[2]
+                        insertps xmm1, dword ptr[r11+rcx + 28], 48              ;moving (c+7)-th element of weights array to xmm1[3]
 
                         mov rcx, r8                                             ;restoring original value of rcx
 
@@ -50,28 +50,27 @@ loop_start3:            vxorps ymm1, ymm1, ymm1                                 
                         movd xmm4, r8d                                          ;moving r8d value to xmm4
                         addss xmm0, xmm4                                        ;adding xmm3[2] to output variable
 
-                        EXTRACTPS r8d, xmm3, 3                                  ;extracting xmm[3] and moving into r8d
+                        EXTRACTPS r8d, xmm3, 3                                  ;extracting xmm3[3] and moving into r8d
                         movd xmm4, r8d                                          ;moving r8d value to xmm4
                         addss xmm0, xmm4                                        ;adding xmm3[3] to output variable
 
                         vextractf128 xmm3, ymm3, 1                              ;moving upper part of ymm3 register to xmm3 register
 
-                        EXTRACTPS r8d, xmm3, 0                                  ;extracting xmm[4] and moving into r8d
+                        EXTRACTPS r8d, xmm3, 0                                  ;extracting xmm3[0] and moving into r8d
                         movd xmm4, r8d                                          ;moving r8d value to xmm4
-                        addss xmm0, xmm4                                        ;adding xmm3[4] to output variable
+                        addss xmm0, xmm4                                        ;adding xmm3[0] to output variable
 
-                        EXTRACTPS r8d, xmm3, 1                                  ;extracting xmm[5] and moving into r8d
+                        EXTRACTPS r8d, xmm3, 1                                  ;extracting xmm3[1] and moving into r8d
                         movd xmm4, r8d                                          ;moving r8d value to xmm4
-                        addss xmm0, xmm4                                        ;adding xmm3[5] to output variable
+                        addss xmm0, xmm4                                        ;adding xmm3[1] to output variable
 
-                        EXTRACTPS r8d, xmm3, 2                                  ;extracting xmm[6] and moving into r8d
+                        EXTRACTPS r8d, xmm3, 2                                  ;extracting xmm3[2] and moving into r8d
                         movd xmm4, r8d                                          ;moving r8d value to xmm4
-                        addss xmm0, xmm4                                        ;adding xmm3[6] to output variable
+                        addss xmm0, xmm4                                        ;adding xmm3[2] to output variable
 
-                        EXTRACTPS r8d, xmm3, 3                                  ;extracting xmm[7] and moving into r8d
+                        EXTRACTPS r8d, xmm3, 3                                  ;extracting xmm3[3] and moving into r8d
                         movd xmm4, r8d                                          ;moving r8d value to xmm4
-                        addss xmm0, xmm4                                        ;adding xmm3[7] to output variable
-
+                        addss xmm0, xmm4                                        ;adding xmm3[3] to output variable
                         inc rcx                                                 ;increment rcx
                         cmp rcx, rdx                                            ;compare counter with diameter / 4
                         jl loop_start3                                          ;if counter is lower than diameter / 4, move to loop_start

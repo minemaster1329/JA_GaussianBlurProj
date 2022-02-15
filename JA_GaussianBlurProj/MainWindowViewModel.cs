@@ -12,10 +12,6 @@ namespace JA_GaussianBlurProj
 {
     public partial class MainWindowViewModel : INotifyPropertyChanged
     {
-        [DllImport("C:\\Users\\StdUser\\source\\repos\\JA_GaussianBlurProj\\x64\\Debug\\LibASM.dll")]
-        private static  extern float MyProc5(float fl1, float fl2);
-
-
         private readonly object _progressLocker = new object();
 
         public RelaySyncCommand SelectInputDirectoryCommand { get; }
@@ -31,6 +27,7 @@ namespace JA_GaussianBlurProj
         private double _progress;
         private string _duration;
         private double _imagesCount;
+        private bool _notBusy = true;
 
         #region PROPERTIES
         public int ThreadsCount
@@ -124,7 +121,15 @@ namespace JA_GaussianBlurProj
             }
         }
 
-        public bool NotBusy { get; private set; } = true;
+        public bool NotBusy
+        {
+            get => _notBusy;
+            set
+            {
+                _notBusy = value;
+                OnPropertyChanged();
+            }
+        }
         #endregion
 
         public int TimeMiliseconds { get; private set; } = 0;

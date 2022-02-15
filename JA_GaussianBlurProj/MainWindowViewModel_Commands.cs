@@ -1,20 +1,15 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.DirectoryServices.ActiveDirectory;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Forms;
-using JA_GaussianBlurProj.Annotations;
 using Lab_CS;
 using SimplexNoise;
 using static System.Windows.Forms.DialogResult;
@@ -45,7 +40,7 @@ namespace JA_GaussianBlurProj
             int diameter);
 
         private int _numberOfThreadsNotCompleted = 100;
-        private ManualResetEvent _manualResetEvent = new ManualResetEvent(false);
+        private readonly ManualResetEvent _manualResetEvent = new ManualResetEvent(false);
 
         private void SelectInputDirectoryCommandExecute(object parameter)
         {
@@ -82,16 +77,17 @@ namespace JA_GaussianBlurProj
                 {
                     MessageBox.Show("Sigma parameter must be greater than 0", "Error when checking input parameters",
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    NotBusy = true;
                     return;
                 }
 
-                if (InputDirectory == "")
+                if (string.IsNullOrEmpty(InputDirectory))
                 {
                     errors += "Input directory cannot be empty\n";
                     dirError = true;
                 }
 
-                if (OutputDirectory == "")
+                if (string.IsNullOrEmpty(OutputDirectory))
                 {
                     errors += "Output directory cannot be empty\n";
                     dirError = true;
@@ -100,6 +96,7 @@ namespace JA_GaussianBlurProj
                 if (dirError)
                 {
                     MessageBox.Show(errors, "Error when checking input parameters", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    NotBusy = true;
                     return;
                 }
 
@@ -109,6 +106,7 @@ namespace JA_GaussianBlurProj
                 if (!photos.Any())
                 {
                     MessageBox.Show("No Image files have been found", "Error when searching for files", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    NotBusy = true;
                     return;
                 }
 
@@ -161,6 +159,7 @@ namespace JA_GaussianBlurProj
                 stopwatch.Stop();
                 _manualResetEvent.Reset();
                 Duration = $"{stopwatch.ElapsedMilliseconds} ms";
+                NotBusy = true;
             }));
         }
 
