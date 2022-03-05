@@ -147,6 +147,7 @@ namespace JA_GaussianBlurProj
                         waitCallback = CalculatePhotoASM;
                         break;
                     default:
+                        NotBusy = true;
                         throw new ArgumentOutOfRangeException("Invalid lib selected");
                 }
                 Stopwatch stopwatch = new Stopwatch();
@@ -165,6 +166,8 @@ namespace JA_GaussianBlurProj
 
         private async Task BenchmarkButtonAsyncCommandExecute()
         {
+            NotBusy = false;
+            Duration = "Preparing for benchmark";
             DialogResult askForBenchmark =
                 MessageBox.Show(
                     "Are you sure you want to run benchmark?\nIt may take several hours to generate output:",
@@ -178,26 +181,30 @@ namespace JA_GaussianBlurProj
             switch (askForGeneratingNewTestdataDialogResult)
             {
                 case Cancel:
+                    NotBusy = true;
                     return;
                 case Yes:
                     await GenerateTestDataAsync();
+                    NotBusy = true;
                     break;
                 case No:
                     break;
                 default:
+                    NotBusy = true;
                     throw new ArgumentOutOfRangeException();
             }
             
             Sigma = 10.0f;
-            Radius = 10;
+            Radius = 5;
 
-            int[] threads = {1, 3, 15, 255, 65535, 65535, 65535};
-            int[] threads_counts = {1, 2, 4, 8, 16, 32, 64};
+            int[] threads = {3, 15, 255, 65535, 65535, 65535};
+            int[] threadsCounts = {2, 4, 8, 16, 32, 64};
             Excel.Application xlApp = new Excel.Application();
 
             if (xlApp == null)
             {
                 MessageBox.Show("Cannot open excel app");
+                NotBusy = true;
                 return;
             }
 
@@ -215,28 +222,100 @@ namespace JA_GaussianBlurProj
             worksheet_medium.Cells[1, 1] = "Threads count:";
             worksheet_medium.Cells[1, 2] = "Time (ms):";
 
-            for (int i = 0; i < 7; i++)
-            {
-                Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(threads[i]);
-                Process.GetCurrentProcess().Refresh();
-                ThreadPool.SetMaxThreads(threads_counts[i], threads_counts[i]);
-                long time_small_data = await BenchmarkCSAsyncSmall();
-                worksheet_small.Cells[i + 2, 1] = threads_counts[i];
-                worksheet_small.Cells[i + 2, 2] = time_small_data;
-                time_small_data = await BenchmarkCPPAsyncSmall();
-                worksheet_small.Cells[i + 2, 3] = time_small_data;
-                time_small_data = await BenchmarkASMAsyncSmall();
-                worksheet_small.Cells[i + 2, 4] = time_small_data;
-            }
+            Excel.Worksheet worksheet_large = (Excel.Worksheet)workbook.Worksheets.Add();
+            worksheet_medium.Name = "Results Large Data";
+            worksheet_medium.Cells[1, 1] = "Threads count:";
+            worksheet_medium.Cells[1, 2] = "Time (ms):";
 
+            try
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(threads[i]);
+                    Process.GetCurrentProcess().Refresh();
+                    ThreadsCount = threadsCounts[i];
+                    ThreadPool.SetMaxThreads(threadsCounts[i], threadsCounts[i]);
+                    Duration = $"Benchmarking CS small on {ThreadsCount} threads";
+                    long time_small_data = await BenchmarkCSAsyncSmall();
+                    worksheet_small.Cells[i + 2, 1] = threadsCounts[i];
+                    worksheet_small.Cells[i + 2, 2] = time_small_data;
+                    GC.Collect();
+                    Thread.Sleep(10000);
+                    Duration = $"Benchmarking CPP small on {ThreadsCount} threads";
+                    time_small_data = await BenchmarkCPPAsyncSmall();
+                    worksheet_small.Cells[i + 2, 3] = time_small_data;
+                    GC.Collect();
+                    Thread.Sleep(10000);
+                    Duration = $"Benchmarking ASM small on {ThreadsCount} threads";
+                    time_small_data = await BenchmarkASMAsyncSmall();
+                    worksheet_small.Cells[i + 2, 4] = time_small_data;
+                }
+
+                GC.Collect();
+                Thread.Sleep(100000);
+
+                for (int i = 0; i < 6; i++)
+                {
+                    Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(threads[i]);
+                    Process.GetCurrentProcess().Refresh();
+                    ThreadPool.SetMaxThreads(threadsCounts[i], threadsCounts[i]);
+                    ThreadsCount = threadsCounts[i];
+                    Duration = $"Benchmarking CS medium on {ThreadsCount} threads";
+                    long time_medium_data = await BenchmarkCSAsyncMedium();
+                    worksheet_medium.Cells[i + 2, 1] = threadsCounts[i];
+                    worksheet_medium.Cells[i + 2, 2] = time_medium_data;
+                    GC.Collect();
+                    Thread.Sleep(10000);
+                    Duration = $"Benchmarking CPP medium on {ThreadsCount} threads";
+                    time_medium_data = await BenchmarkCPPAsyncMedium();
+                    worksheet_medium.Cells[i + 2, 3] = time_medium_data;
+                    GC.Collect();
+                    Thread.Sleep(10000);
+                    Duration = $"Benchmarking ASM medium on {ThreadsCount} threads";
+                    time_medium_data = await BenchmarkASMAsyncMedium();
+                    worksheet_medium.Cells[i + 2, 4] = time_medium_data;
+                    Thread.Sleep(10000);
+                }
+                Thread.Sleep(100000);
+                for (int i = 0; i < 6; i++)
+                {
+                    Process.GetCurrentProcess().ProcessorAffinity = new IntPtr(threads[i]);
+                    Process.GetCurrentProcess().Refresh();
+                    ThreadPool.SetMaxThreads(threadsCounts[i], threadsCounts[i]);
+                    ThreadsCount = threadsCounts[i];
+                    Duration = $"Benchmarking CS large on {ThreadsCount} threads";
+                    long time_large_data = await BenchmarkCSAsyncLarge();
+                    worksheet_large.Cells[i + 2, 1] = threadsCounts[i];
+                    worksheet_large.Cells[i + 2, 2] = time_large_data;
+                    GC.Collect();
+                    Thread.Sleep(10000);
+                    Duration = $"Benchmarking CPP large on {ThreadsCount} threads";
+                    time_large_data = await BenchmarkCPPAsyncLarge();
+                    worksheet_large.Cells[i + 2, 3] = time_large_data;
+                    GC.Collect();
+                    Thread.Sleep(10000);
+                    Duration = $"Benchmarking ASM large on {ThreadsCount} threads";
+                    time_large_data = await BenchmarkASMAsyncLarge();
+                    worksheet_large.Cells[i + 2, 4] = time_large_data;
+                }
+                GC.Collect();
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(e.Message, "Error when benchmarking app", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            Duration = "Saving data";
             workbook.SaveAs(@"D:\TestData\benchmark_results.xlsx", Excel.XlFileFormat.xlWorkbookDefault);
             workbook.Close(true, Missing.Value, Missing.Value);
             xlApp.Quit();
 
             Marshal.ReleaseComObject(worksheet_small);
             Marshal.ReleaseComObject(worksheet_medium);
+            Marshal.ReleaseComObject(worksheet_large);
             Marshal.ReleaseComObject(workbook);
             Marshal.ReleaseComObject(xlApp);
+            Duration = "Benchmark done successfully";
+            NotBusy = true;
         }
 
         private Task GenerateTestDataAsync() => Task.Factory.StartNew(() =>
@@ -312,8 +391,8 @@ namespace JA_GaussianBlurProj
             } while (seedsList.Count < 9 * samples);
 
             const int smallImageSize = 500;
-            const int mediumImageSize = 2500;
-            const int largeImageSize = 5000;
+            const int mediumImageSize = 1000;
+            const int largeImageSize = 2500;
 
             for (int i = 0, j = 3 * samples, k = 6*samples; i < samples; i++, j++, k++)
             {
@@ -387,10 +466,10 @@ namespace JA_GaussianBlurProj
                 bitmap.Save($"D:\\TestData\\large\\img_large{i}.png", ImageFormat.Png);
             }
 
-#endregion
+        #endregion
         });
 
-#region BENCHMARK SMALL DATA
+        #region BENCHMARK SMALL DATA
         private Task<long> BenchmarkCSAsyncSmall()
         {
             return Task.Run(() =>
@@ -452,23 +531,130 @@ namespace JA_GaussianBlurProj
         #endregion
 
         #region BENCHMARK MEDIUM DATA
-        private void BenchmarkCSAsyncMedium()
+        private Task<long> BenchmarkCSAsyncMedium()
         {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\medium");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
 
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
         }
 
-        private void BenchmarkCPPAsyncMedium()
+        private Task<long> BenchmarkCPPAsyncMedium()
         {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\medium");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
 
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
         }
 
-        private void BenchmarkASMAsyncMedium()
+        private Task<long> BenchmarkASMAsyncMedium()
         {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\medium");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
 
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
         }
-#endregion
+        #endregion
 
-#region CALCULATE PHOTO
+        #region BENCHMARK LARGE DATA
+        private Task<long> BenchmarkCSAsyncLarge()
+        {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\large");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
+
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
+        }
+
+        private Task<long> BenchmarkCPPAsyncLarge()
+        {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\large");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
+
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
+        }
+
+        private Task<long> BenchmarkASMAsyncLarge()
+        {
+            return Task.Run(() =>
+            {
+                DirectoryInfo smallDataDirectory = new DirectoryInfo(@"D:\Testdata\large");
+                Stopwatch stopwatch = new Stopwatch();
+                _manualResetEvent.Reset();
+                _numberOfThreadsNotCompleted = 100;
+                stopwatch.Start();
+                foreach (FileInfo file in smallDataDirectory.EnumerateFiles())
+                {
+                    ThreadPool.QueueUserWorkItem(CalculatePhotoCPP, file);
+                }
+
+                _manualResetEvent.WaitOne();
+                stopwatch.Stop();
+                return stopwatch.ElapsedMilliseconds;
+            });
+        }
+        #endregion
+
+        #region CALCULATE PHOTO
 
         private void CalculatePhotoCS(object param)
         {
